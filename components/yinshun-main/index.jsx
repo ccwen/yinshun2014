@@ -55,10 +55,11 @@ var main = React.createClass({
     }
   },  
   genToc:function(texts,depths,extras) {
-    var out=[];
+    var out=[{depth:0,text:"印順法師佛學著作集"}];
     for (var i=0;i<texts.length;i++) {
       out.push({text:texts[i],depth:depths[i], extra:extras[i]});
     }
+
     return out; 
   },     
   onReady:function(usage,quota) {
@@ -69,6 +70,7 @@ var main = React.createClass({
           var depths=db.get(["fields","head_depth"]);
           var extra=db.get(["fields","head_voff"]);
           var toc=this.genToc(heads,depths,extra);//,toc:toc
+          this.setState({toc:toc});
        });
     },this);      
     this.setState({dialog:false,quota:quota,usage:usage});

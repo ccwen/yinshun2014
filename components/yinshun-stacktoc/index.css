@@ -1,1 +1,6 @@
 .stacktoc {}
+
+div.node {cursor:pointer;}
+div.parent {  }
+div.current { color:green}
+div.child {color:blue}
