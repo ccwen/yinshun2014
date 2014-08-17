@@ -13461,7 +13461,7 @@ require.register("yinshun-main/index.js", function(exports, require, module){
 
 var require_kdb=[{ 
   filename:"yinshun.kdb"  , url:"http://ya.ksana.tw/kdb/yinshun.kdb" , desc:"yinshun"
-}];  
+}];   
 var bootstrap=Require("bootstrap"); 
 var fileinstaller=Require("fileinstaller");
 var Kde=Require('ksana-document').kde;  // Ksana Database Engine
@@ -13551,11 +13551,17 @@ var main = React.createClass({displayName: 'main',
     return (
       React.DOM.div(null, 
         this.state.dialog?this.openFileinstaller():null,
-        React.DOM.button( {onClick:this.fidialog}, "file installer"),
-            this.renderinputs(),
-          stacktoc( {data:this.state.toc}), 
+        React.DOM.div( {className:"col-md-3"},    "   ",   this.renderinputs(),
+          stacktoc( {data:this.state.toc})),
+          React.DOM.div( {className:"col-md-4"}, 
+          React.DOM.button( {onClick:this.fidialog}, "file installer"),
           React.DOM.span(null, this.state.elapse),    
             resultlist( {res:this.state.res})
+          ),
+          React.DOM.div( {className:"col-md-5"}, 
+          "text"
+          )
+
       )
     );
   }
@@ -13581,13 +13587,17 @@ var comp1 = React.createClass({displayName: 'comp1',
 });
 module.exports=comp1;
 });
-require.register("yinshun-stacktoc/index.js", function(exports, require, module){
+require.register("ksanaforge-stacktoc/index.js", function(exports, require, module){
 /** @jsx React.DOM */
-
+ 
 //var othercomponent=Require("other"); 
 var Ancestors=React.createClass({displayName: 'Ancestors',
+  goback:function(e) {
+    var n=e.target.parentNode.dataset["n"];
+    this.props.setCurrent(n);
+  },
   renderAncestor:function(n,idx) {
-    return React.DOM.div( {className:"node parent", n:n}, idx+1,".",this.props.toc[n].text)
+    return React.DOM.div( {className:"node parent", 'data-n':n}, idx+1,".",React.DOM.span( {onClick:this.goback}, this.props.toc[n].text))
   },
   render:function() {
     if (!this.props.data || !this.props.data.length) return React.DOM.div(null);
@@ -13595,13 +13605,30 @@ var Ancestors=React.createClass({displayName: 'Ancestors',
   }
 });
 var Children=React.createClass({displayName: 'Children',
+  open:function(e) {
+    var n=e.target.parentNode.dataset["n"];
+    if (typeof n!=="undefined") this.props.setCurrent(n);
+  },
+  openNode:function() {
+    return React.DOM.button( {onClick:this.open}, "...")
+  },
   renderChild:function(n) {
     var child=this.props.toc[n];
     //var extra="";
-    var classes="node child";
+    var classes="node",haschild=false;  
     //if (child.extra) extra="<extra>"+child.extra+"</extra>";
-    if (child.folder) classes+=" haschild";    
-    return React.DOM.div( {className:classes, n:n}, this.props.toc[n].text)
+    if (!child.hasChild) classes+=" nochild";
+    else {
+        classes+=" child";
+        haschild=true;
+    } 
+
+    return React.DOM.div( {className:classes, 'data-n':n},  
+    React.DOM.span( {onClick:this.go}, this.props.toc[n].text),haschild?this.openNode():"")
+  },
+  go:function(e) {
+    var n=e.target.parentNode.dataset["n"];
+
   },
   render:function() {
     if (!this.props.data || !this.props.data.length) return React.DOM.div(null);
@@ -13610,7 +13637,7 @@ var Children=React.createClass({displayName: 'Children',
 });
 var stacktoc = React.createClass({displayName: 'stacktoc',
   getInitialState: function() {
-    return {bar: "world",tocReady:false,cur:0};//402
+    return {bar: "world",tocReady:false,cur:327};//403
   },
   buildtoc: function() {
       var toc=this.props.data;
@@ -13621,7 +13648,10 @@ var stacktoc = React.createClass({displayName: 'stacktoc',
         if (prev>depth) { //link to prev sibling
           if (depths[depth]) toc[depths[depth]].next = i;
           for (var j=depth;j<prev;j++) depths[j]=0;
-        }        
+        }
+        if (i<toc.length-1 && toc[i+1].depth>depth) {
+          toc[i].hasChild=true;
+        }
         depths[depth]=i;
         prev=depth;
       }
@@ -13669,13 +13699,17 @@ var stacktoc = React.createClass({displayName: 'stacktoc',
       this.setState({tocReady:true});
     }
   }, 
+  setCurrent:function(n) {
+    n=parseInt(n);
+    this.setState({cur:n});
+  },
   render: function() {
     if (!this.props.data || !this.props.data.length) return React.DOM.div(null)
     return (
-      React.DOM.div(null, 
-        Ancestors( {toc:this.props.data, data:this.enumAncestors()}),
+      React.DOM.div(null,  
+        Ancestors( {setCurrent:this.setCurrent, toc:this.props.data, data:this.enumAncestors()}),
         React.DOM.div( {className:"node current", n:this.state.cur}, this.props.data[this.state.cur].text),
-        Children( {toc:this.props.data, data:this.enumChildren()})
+        Children( {setCurrent:this.setCurrent, toc:this.props.data, data:this.enumChildren()})
       )
     ); 
   }
@@ -13778,10 +13812,10 @@ require.alias("yinshun-comp1/index.js", "yinshun/deps/comp1/index.js");
 require.alias("yinshun-comp1/index.js", "yinshun/deps/comp1/index.js");
 require.alias("yinshun-comp1/index.js", "comp1/index.js");
 require.alias("yinshun-comp1/index.js", "yinshun-comp1/index.js");
-require.alias("yinshun-stacktoc/index.js", "yinshun/deps/stacktoc/index.js");
-require.alias("yinshun-stacktoc/index.js", "yinshun/deps/stacktoc/index.js");
-require.alias("yinshun-stacktoc/index.js", "stacktoc/index.js");
-require.alias("yinshun-stacktoc/index.js", "yinshun-stacktoc/index.js");
+require.alias("ksanaforge-stacktoc/index.js", "yinshun/deps/stacktoc/index.js");
+require.alias("ksanaforge-stacktoc/index.js", "yinshun/deps/stacktoc/index.js");
+require.alias("ksanaforge-stacktoc/index.js", "stacktoc/index.js");
+require.alias("ksanaforge-stacktoc/index.js", "ksanaforge-stacktoc/index.js");
 require.alias("yinshun/index.js", "yinshun/index.js");
 if (typeof exports == 'object') {
   module.exports = require('yinshun');

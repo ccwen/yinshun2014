@@ -13,7 +13,7 @@
     "ksanaforge/htmlfs": "*",
     "yinshun/main": "*",
     "yinshun/comp1": "*",
-    "yinshun/stacktoc": "*"
+    "ksanaforge/stacktoc": "*"
   },
   "development": {},
   "paths": [

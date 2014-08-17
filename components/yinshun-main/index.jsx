@@ -2,7 +2,7 @@
 
 var require_kdb=[{ 
   filename:"yinshun.kdb"  , url:"http://ya.ksana.tw/kdb/yinshun.kdb" , desc:"yinshun"
-}];  
+}];   
 var bootstrap=Require("bootstrap"); 
 var fileinstaller=Require("fileinstaller");
 var Kde=Require('ksana-document').kde;  // Ksana Database Engine
@@ -92,11 +92,17 @@ var main = React.createClass({
     return (
       <div>
         {this.state.dialog?this.openFileinstaller():null}
-        <button onClick={this.fidialog}>file installer</button>
-            {this.renderinputs()}
-          <stacktoc data={this.state.toc}/> 
+        <div className="col-md-3">   {this.renderinputs()}
+          <stacktoc data={this.state.toc}/></div>
+          <div className="col-md-4">
+          <button onClick={this.fidialog}>file installer</button>
           <span>{this.state.elapse}</span>    
             <resultlist res={this.state.res}/>
+          </div>
+          <div className="col-md-5">
+          text
+          </div>
+
       </div>
     );
   }

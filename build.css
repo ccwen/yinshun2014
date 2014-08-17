@@ -7133,8 +7133,12 @@ hl[n="0"] {color:blue;}
 .comp1 {}
 .stacktoc {}
 
-div.node {cursor:pointer;}
-div.parent {  }
-div.current { color:green}
-div.child {color:blue}
+div.node {}
+div.node span:hover{text-decoration:underline;cursor:pointer;}
+div.parent {  background:lightyellow;}
+div.current {color:green; background:lightgreen;}
+div.current:hover{text-decoration: none}
+div.child {}
+div.nochild {}
+div.nochild:hover {text-decoration: none};
 #main {}
