@@ -1,6 +1,6 @@
 .main {}
-hl {color:red;}
-hl[n="0"] {color:blue;}
+hl {background:lightgreen}
+hl[n="0"] {background:pink}
 .row {
     width:99.99%;
 }
@@ -8,3 +8,5 @@ hl[n="0"] {color:blue;}
    padding: 0 !important;
    margin: 0 !important;
 }
+
+.sourcepage:hover {text-decoration:underline;color:blue;cursor: pointer}
