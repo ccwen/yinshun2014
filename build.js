@@ -4006,7 +4006,7 @@ var normalize_tibetan=function(token) {
 
 var isSkip_tibetan=function(token) {
 	var t=token.trim();
-	return (t=="" || t=="　" || t=="\n");	
+	return (t=="" || t=="　" ||  t=="\n");	
 }
 var simple1={
 	func:{
@@ -4156,6 +4156,7 @@ var normalize=null;
 var tokenize=null;
 
 var putPosting=function(tk) {
+	debugger;
 	var	postingid=session.json.tokens[tk];
 	var out=session.json, posting=null;
 	if (!postingid) {
@@ -4302,7 +4303,7 @@ var storeFields=function(fields,json) {
 			}
 			storepoint=storepoint[path[i]];
 		}
-		if (!field.value) {
+		if (typeof field.value=="undefined") {
 			throw "empty field value of "+path;
 		} 
 		storepoint.push(field.value);
@@ -4417,7 +4418,7 @@ var initIndexer=function(mkdbconfig) {
 	var Kde=nodeRequire("./kde");
 
 	session=initSession(mkdbconfig);
-	api=nodeRequire("ksana-document").customfunc.getAPI(mkdbconfig.config);
+	api=nodeRequire("ksana-document").customfunc.getAPI(mkdbconfig.meta.config);
 	xml4kdb=nodeRequire("ksana-document").xml4kdb;
 
 	//mkdbconfig has a chance to overwrite API
@@ -4454,6 +4455,7 @@ var indexstep=function() {
 	if (session.filenow<session.files.length) {
 		status.filename=session.files[session.filenow];
 		status.progress=session.filenow/session.files.length;
+		status.filenow=session.filenow;
 		putFile(status.filename,function(){
 			session.filenow++;
 			setTimeout(indexstep,1); //rest for 1 ms to response status			
@@ -6666,7 +6668,7 @@ var _search=function(engine,q,opts,cb) {
 
 var _highlightPage=function(engine,fileid,pageid,opts,cb){
 	if (opts.q) {
-		require("./search").main(engine,opts.q,opts,function(Q){
+		_search(engine,opts.q,opts,function(Q){
 			api.excerpt.highlightPage(Q,fileid,pageid,opts,cb);
 		});
 	} else {
@@ -6769,7 +6771,7 @@ var getFilePageOffsets=function(i) {
 var getFilePageNames=function(i) {
 	var range=getFileRange.apply(this,[i]);
 	var pageNames=this.get("pageNames");
-	return pageNames.slice(range.Start,range.end);
+	return pageNames.slice(range.start,range.end);
 }
 var getDocument=function(filename,cb){
 	var engine=this;
@@ -8205,6 +8207,10 @@ var resultlist=function(engine,Q,opts,cb) {
 			var startvpos=files[output[i].file].pageOffsets[output[i].page];
 			var endvpos=files[output[i].file].pageOffsets[output[i].page+1];
 			var hl={};
+
+			if (opts.range && opts.range.start && startvpos<opts.range.start ) {
+				startvpos=opts.range.start;
+			}
 			
 			if (opts.nohighlight) {
 				hl.text=pages[i];
@@ -8213,13 +8219,22 @@ var resultlist=function(engine,Q,opts,cb) {
 				var o={text:pages[i],startvpos:startvpos, endvpos: endvpos, Q:Q,fulltext:opts.fulltext};
 				hl=highlight(Q,o);
 			}
-			output[i].text=hl.text;
-			output[i].hits=hl.hits;
-			output[i].seq=seq;
-			seq+=hl.hits.length;
+			if (hl.text) {
+				output[i].text=hl.text;
+				output[i].hits=hl.hits;
+				output[i].seq=seq;
+				seq+=hl.hits.length;
 
-			output[i].start=startvpos;
+				output[i].start=startvpos;				
+			} else {
+				output[i]=null; //remove item vpos less than opts.range.start
+			}
 			if (opts.range.maxhit && seq>opts.range.maxhit) {
+				while(!output[0]) {
+					output.shift();
+					i--;
+				}
+
 				output.length=i;
 				break;
 			}
@@ -8308,18 +8323,17 @@ var highlightPage=function(Q,fileid,pageid,opts,cb) {
 	if (typeof opts=="function") {
 		cb=opts;
 	}
+
 	if (!Q || !Q.engine) return cb(null);
+	var pageOffsets=Q.engine.getFilePageOffsets(fileid);
+	var startvpos=pageOffsets[pageid];
+	var endvpos=pageOffsets[pageid+1];
 
-	getPage(Q.engine,fileid,pageid,function(page){
-		Q.engine.get(["files",fileid,"pageOffset"],true,function(pageOffset){
-			var startvpos=pageOffset[page.page];
-			var endvpos=pageOffset[page.page+1];
-
-			var opt={text:page.text,hits:null,tag:'hl',voff:startvpos,fulltext:true};
-			opt.hits=hitInRange(Q,startvpos,endvpos);
-			cb.apply(Q.engine.context,[{text:injectTag(Q,opt),hits:opt.hits}]);
-		});
-	});
+	this.getPage(Q.engine, fileid,pageid,function(res){
+		var opt={text:res.text,hits:null,tag:'hl',voff:startvpos,fulltext:true};
+		opt.hits=hitInRange(Q,startvpos,endvpos);
+		cb.apply(Q.engine.context,[{text:injectTag(Q,opt),hits:opt.hits}]);
+	})
 }
 module.exports={resultlist:resultlist, 
 	hitInRange:hitInRange, 
@@ -13599,9 +13613,9 @@ module.exports=comp1;
 });
 require.register("ksanaforge-stacktoc/index.js", function(exports, require, module){
 /** @jsx React.DOM */
-
+  
 var trimHit=function(hit) {
-  if (hit>999) {
+  if (hit>999) { 
     return (Math.floor(hit/1000)).toString()+"K+";
   } else return hit.toString();
 }
@@ -13618,7 +13632,7 @@ var Ancestors=React.createClass({displayName: 'Ancestors',
     this.props.hitClick(n);
   }, 
   showHit:function(hit) {
-    if (hit)  return React.DOM.span( {onClick:this.showExcerpt, className:"pull-right badge"}, hit)
+    if (hit)  return React.DOM.span( {onClick:this.showExcerpt, className:"pull-right badge"}, trimHit(hit))
     else return React.DOM.span(null);
   },
   renderAncestor:function(n,idx) {
@@ -13636,7 +13650,7 @@ var Children=React.createClass({displayName: 'Children',
     if (typeof n!=="undefined") this.props.setCurrent(n);
   }, 
   showHit:function(hit) {
-    if (hit)  return React.DOM.span( {onClick:this.showExcerpt, className:"pull-right badge"}, hit)
+    if (hit)  return React.DOM.span( {onClick:this.showExcerpt, className:"pull-right badge"}, trimHit(hit))
     else return React.DOM.span(null);
   },
   showExcerpt:function(e) {
@@ -13675,7 +13689,7 @@ var Children=React.createClass({displayName: 'Children',
 });
 var stacktoc = React.createClass({displayName: 'stacktoc',
   getInitialState: function() {
-    return {bar: "world",tocReady:false,cur:0};//403
+    return {bar: "world",tocReady:false,cur:1809};//403
   },
   buildtoc: function() {
       var toc=this.props.data;
@@ -13692,8 +13706,8 @@ var stacktoc = React.createClass({displayName: 'stacktoc',
         }
         depths[depth]=i;
         prev=depth;
-      }
-    },
+      } 
+    }, 
     enumAncestors:function() {
       var toc=this.props.data;
       if (!toc || !toc.length) return;
@@ -13701,13 +13715,14 @@ var stacktoc = React.createClass({displayName: 'stacktoc',
       var n=cur-1;
       var depth=toc[cur].depth - 1;
       var parents=[];
-      while (n>=0 && depth>=0) {
+      while (n>=0 && depth>0) {
         if (toc[n].depth==depth) {
           parents.unshift(n);
           depth--;
         }
         n--;
       }
+      parents.unshift(0); //first ancestor is root node
       return parents;
     },
     enumChildren : function() {
@@ -13797,7 +13812,7 @@ var stacktoc = React.createClass({displayName: 'stacktoc',
     this.hitClick(this.state.cur);
   },
   showHit:function(hit) {
-    if (hit)  return React.DOM.span( {onClick:this.onHitClick, className:"pull-right badge"}, hit)
+    if (hit)  return React.DOM.span( {onClick:this.onHitClick, className:"pull-right badge"}, trimHit(hit))
     else return React.DOM.span(null);
   },
   render: function() {
