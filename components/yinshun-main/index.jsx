@@ -96,14 +96,15 @@ var main = React.createClass({
     var pageOffsets=engine.get("pageOffsets");
     var fileOffsets=engine.get(["fileOffsets"]);
     var pageNames=engine.get("pageNames");
-    var fileid=engine.bsearchNear(fileOffsets,voff);
-    var pageid=engine.bsearchNear(pageOffsets,voff);
+    var fileid=engine.bsearchNear(fileOffsets,voff+1);
     fileid--;
+    var pageid=engine.bsearchNear(pageOffsets,voff+1);
+    pageid--;
 
     var fileOffset=fileOffsets[fileid];
-    var pageOffset=engine.bsearchNear(pageOffsets,fileOffset);
+    var pageOffset=engine.bsearchNear(pageOffsets,fileOffset+1);
+    pageOffset--;
     pageid-=pageOffset;
-    pageid++;
 
     kse.highlightPage(engine,fileid,pageid,{q:this.state.q},function(data){
       this.setState({bodytext:data,res:[]});
