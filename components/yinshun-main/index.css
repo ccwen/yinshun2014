@@ -10,3 +10,6 @@ hl[n="0"] {background:pink}
 }
 
 .sourcepage:hover {text-decoration:underline;color:blue;cursor: pointer}
+
+.bodytext{font-size:175%;}
+.resultitem{font-size:150%;}

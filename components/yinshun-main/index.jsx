@@ -5,15 +5,16 @@ var require_kdb=[{
 }];   
 var bootstrap=Require("bootstrap");  
 var fileinstaller=Require("fileinstaller");
-var Kde=Require('ksana-document').kde;  // Ksana Database Engine
-var Kse=Require('ksana-document').kse; // Ksana Search Engine (run at client side)
+var kde=Require('ksana-document').kde;  // Ksana Database Engine
+var kse=Require('ksana-document').kse; // Ksana Search Engine (run at client side)
 var stacktoc=Require("stacktoc");
 var resultlist=React.createClass({  //should search result
   show:function() {  
     return this.props.res.excerpt.map(function(r,i){ // excerpt is an array 
+      if (! r) return null;
       return <div>
       <span className="sourcepage">{r.pagename}</span>)
-      <span dangerouslySetInnerHTML={{__html:r.text}}></span>
+      <span className="resultitem" dangerouslySetInnerHTML={{__html:r.text}}></span>
       </div>
     })
   },
@@ -34,8 +35,8 @@ var main = React.createClass({
     var start=start||0;
     var t=new Date();
     var tofind=this.refs.tofind.getDOMNode().value; // get tofind
-    Kse.search(this.state.db,tofind,{range:{start:start,maxhit:20}},function(data){ //call search engine
-      this.setState({res:data,elapse:(new Date()-t)+"ms"});
+    kse.search(this.state.db,tofind,{range:{start:start,maxhit:20}},function(data){ //call search engine
+      this.setState({res:data,elapse:(new Date()-t)+"ms",q:tofind});
       //console.log(data) ; // watch the result from search engine
     });
   },
@@ -63,7 +64,7 @@ var main = React.createClass({
     return out; 
   },     
   onReady:function(usage,quota) {
-    if (!this.state.db) Kde.open("yinshun",function(db){
+    if (!this.state.db) kde.open("yinshun",function(db){
         this.setState({db:db});
         db.get([["fields","head"],["fields","head_depth"],["fields","head_voff"]],function() {
           var heads=db.get(["fields","head"]);
@@ -85,19 +86,40 @@ var main = React.createClass({
   fidialog:function() {
       this.setState({dialog:true});
   },
-  onHitClick:function(n) {
+  showExcerpt:function(n) {
     var voff=this.state.toc[n].voff;
     this.dosearch(null,null,voff);
+  },
+  showText:function(n) {
+    var engine=this.state.db;
+    var voff=this.state.toc[n].voff;
+    var pageOffsets=engine.get("pageOffsets");
+    var fileOffsets=engine.get(["fileOffsets"]);
+    var pageNames=engine.get("pageNames");
+    var fileid=engine.bsearchNear(fileOffsets,voff);
+    var pageid=engine.bsearchNear(pageOffsets,voff);
+    fileid--;
+
+    var fileOffset=fileOffsets[fileid];
+    var pageOffset=engine.bsearchNear(pageOffsets,fileOffset);
+    pageid-=pageOffset;
+    pageid++;
+
+    kse.highlightPage(engine,fileid,pageid,{q:this.state.q},function(data){
+      this.setState({bodytext:data,res:[]});
+    });
   },
   render: function() {  //main render routine
     if (!this.state.quota) { // install required db
         return this.openFileinstaller(true);
     } else { 
+    var text="";    
+    if (this.state.bodytext) text=this.state.bodytext.text;
     return (
       <div>
         {this.state.dialog?this.openFileinstaller():null}
         <div className="col-md-3">
-          <stacktoc onHitClick={this.onHitClick} hits={this.state.res.rawresult} data={this.state.toc}/></div>
+          <stacktoc showText={this.showText} showExcerpt={this.showExcerpt} hits={this.state.res.rawresult} data={this.state.toc}/></div>
           <div className="col-md-4">
           
           <span>{this.state.elapse}</span>
@@ -106,7 +128,7 @@ var main = React.createClass({
           </div>
           <div className="col-md-5">
           <button onClick={this.fidialog}>file installer</button>
-          text
+             <span className="bodytext" dangerouslySetInnerHTML={{__html:text}}></span>
           </div>
 
       </div>

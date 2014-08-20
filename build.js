@@ -13482,15 +13482,16 @@ var require_kdb=[{
 }];   
 var bootstrap=Require("bootstrap");  
 var fileinstaller=Require("fileinstaller");
-var Kde=Require('ksana-document').kde;  // Ksana Database Engine
-var Kse=Require('ksana-document').kse; // Ksana Search Engine (run at client side)
+var kde=Require('ksana-document').kde;  // Ksana Database Engine
+var kse=Require('ksana-document').kse; // Ksana Search Engine (run at client side)
 var stacktoc=Require("stacktoc");
 var resultlist=React.createClass({displayName: 'resultlist',  //should search result
   show:function() {  
     return this.props.res.excerpt.map(function(r,i){ // excerpt is an array 
+      if (! r) return null;
       return React.DOM.div(null, 
       React.DOM.span( {className:"sourcepage"}, r.pagename),")",
-      React.DOM.span( {dangerouslySetInnerHTML:{__html:r.text}})
+      React.DOM.span( {className:"resultitem", dangerouslySetInnerHTML:{__html:r.text}})
       )
     })
   },
@@ -13511,8 +13512,8 @@ var main = React.createClass({displayName: 'main',
     var start=start||0;
     var t=new Date();
     var tofind=this.refs.tofind.getDOMNode().value; // get tofind
-    Kse.search(this.state.db,tofind,{range:{start:start,maxhit:20}},function(data){ //call search engine
-      this.setState({res:data,elapse:(new Date()-t)+"ms"});
+    kse.search(this.state.db,tofind,{range:{start:start,maxhit:20}},function(data){ //call search engine
+      this.setState({res:data,elapse:(new Date()-t)+"ms",q:tofind});
       //console.log(data) ; // watch the result from search engine
     });
   },
@@ -13540,7 +13541,7 @@ var main = React.createClass({displayName: 'main',
     return out; 
   },     
   onReady:function(usage,quota) {
-    if (!this.state.db) Kde.open("yinshun",function(db){
+    if (!this.state.db) kde.open("yinshun",function(db){
         this.setState({db:db});
         db.get([["fields","head"],["fields","head_depth"],["fields","head_voff"]],function() {
           var heads=db.get(["fields","head"]);
@@ -13562,19 +13563,40 @@ var main = React.createClass({displayName: 'main',
   fidialog:function() {
       this.setState({dialog:true});
   },
-  onHitClick:function(n) {
+  showExcerpt:function(n) {
     var voff=this.state.toc[n].voff;
     this.dosearch(null,null,voff);
+  },
+  showText:function(n) {
+    var engine=this.state.db;
+    var voff=this.state.toc[n].voff;
+    var pageOffsets=engine.get("pageOffsets");
+    var fileOffsets=engine.get(["fileOffsets"]);
+    var pageNames=engine.get("pageNames");
+    var fileid=engine.bsearchNear(fileOffsets,voff);
+    var pageid=engine.bsearchNear(pageOffsets,voff);
+    fileid--;
+
+    var fileOffset=fileOffsets[fileid];
+    var pageOffset=engine.bsearchNear(pageOffsets,fileOffset);
+    pageid-=pageOffset;
+    pageid++;
+
+    kse.highlightPage(engine,fileid,pageid,{q:this.state.q},function(data){
+      this.setState({bodytext:data,res:[]});
+    });
   },
   render: function() {  //main render routine
     if (!this.state.quota) { // install required db
         return this.openFileinstaller(true);
     } else { 
+    var text="";    
+    if (this.state.bodytext) text=this.state.bodytext.text;
     return (
       React.DOM.div(null, 
         this.state.dialog?this.openFileinstaller():null,
         React.DOM.div( {className:"col-md-3"}, 
-          stacktoc( {onHitClick:this.onHitClick, hits:this.state.res.rawresult, data:this.state.toc})),
+          stacktoc( {showText:this.showText, showExcerpt:this.showExcerpt, hits:this.state.res.rawresult, data:this.state.toc})),
           React.DOM.div( {className:"col-md-4"}, 
           
           React.DOM.span(null, this.state.elapse),
@@ -13583,7 +13605,7 @@ var main = React.createClass({displayName: 'main',
           ),
           React.DOM.div( {className:"col-md-5"}, 
           React.DOM.button( {onClick:this.fidialog}, "file installer"),
-          "text"
+             React.DOM.span( {className:"bodytext", dangerouslySetInnerHTML:{__html:text}})
           )
 
       )
@@ -13629,7 +13651,7 @@ var Ancestors=React.createClass({displayName: 'Ancestors',
     var n=parseInt(e.target.parentNode.dataset["n"]);
     e.stopPropagation();
     e.preventDefault();
-    this.props.hitClick(n);
+    this.props.showExcerpt(n);
   }, 
   showHit:function(hit) {
     if (hit)  return React.DOM.span( {onClick:this.showExcerpt, className:"pull-right badge"}, trimHit(hit))
@@ -13676,20 +13698,21 @@ var Children=React.createClass({displayName: 'Children',
      
     return React.DOM.div( {className:classes, 'data-n':n},  
     this.openNode(haschild),
-    React.DOM.span( {className:"text",  onClick:this.go}, this.props.toc[n].text),this.showHit(hit))
+    React.DOM.span( {className:"text",  onClick:this.showText}, this.props.toc[n].text),this.showHit(hit))
   }, 
-  go:function(e) {
-    var n=e.target.parentNode.dataset["n"];
-
+  showText:function(e) {
+    var n=e.target.dataset["n"];
+    if (typeof n=="undefined") n=e.target.parentNode.dataset["n"];
+    this.props.showText(parseInt(n));
   },
   render:function() {
     if (!this.props.data || !this.props.data.length) return React.DOM.div(null);
     return React.DOM.div(null, this.props.data.map(this.renderChild))
   }
-});
+}); 
 var stacktoc = React.createClass({displayName: 'stacktoc',
   getInitialState: function() {
-    return {bar: "world",tocReady:false,cur:1809};//403
+    return {bar: "world",tocReady:false,cur:0};//403
   },
   buildtoc: function() {
       var toc=this.props.data;
@@ -13712,6 +13735,7 @@ var stacktoc = React.createClass({displayName: 'stacktoc',
       var toc=this.props.data;
       if (!toc || !toc.length) return;
       var cur=this.state.cur;
+      if (cur==0) return [];
       var n=cur-1;
       var depth=toc[cur].depth - 1;
       var parents=[];
@@ -13802,9 +13826,7 @@ var stacktoc = React.createClass({displayName: 'stacktoc',
       this.fillHit(this.state.cur);
   },
   hitClick:function(n) {
-    if (this.props.onHitClick) {
-      this.props.onHitClick(n);
-    }
+    if (this.props.showExcerpt)  this.props.showExcerpt(n);
   },
   onHitClick:function(e) {
     e.stopPropagation();
@@ -13815,6 +13837,12 @@ var stacktoc = React.createClass({displayName: 'stacktoc',
     if (hit)  return React.DOM.span( {onClick:this.onHitClick, className:"pull-right badge"}, trimHit(hit))
     else return React.DOM.span(null);
   },
+  showText:function(e) {
+    var n=e.target.dataset["n"];
+    if (typeof n=="undefined") n=e.target.parentNode.dataset["n"];
+    this.props.showText(parseInt(n));
+  },
+
   render: function() {
     if (!this.props.data || !this.props.data.length) return React.DOM.div(null)
     var depth=this.props.data[this.state.cur].depth+1;
@@ -13824,9 +13852,9 @@ var stacktoc = React.createClass({displayName: 'stacktoc',
     if (this.props.hits && this.props.hits.length) this.fillHits(ancestors,children);
     return (
       React.DOM.div( {className:"stacktoc"},  
-        Ancestors( {hitClick:this.hitClick, setCurrent:this.setCurrent, toc:this.props.data, data:ancestors}),
-        React.DOM.div( {className:"node current", n:this.state.cur}, React.DOM.span(null, depth,"."),React.DOM.span( {className:"text"}, current.text),this.showHit(current.hit)),
-        Children( {hitClick:this.hitClick, setCurrent:this.setCurrent, toc:this.props.data, data:children})
+        Ancestors( {showExcerpt:this.hitClick, setCurrent:this.setCurrent, toc:this.props.data, data:ancestors}),
+        React.DOM.div( {onClick:this.showText, className:"node current", 'data-n':this.state.cur}, React.DOM.span(null, depth,"."),React.DOM.span( {className:"text"}, current.text),this.showHit(current.hit)),
+        Children( {showText:this.props.showText, hitClick:this.hitClick, setCurrent:this.setCurrent, toc:this.props.data, data:children})
       )
     ); 
   }
