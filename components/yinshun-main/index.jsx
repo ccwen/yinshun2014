@@ -8,6 +8,7 @@ var fileinstaller=Require("fileinstaller");
 var kde=Require('ksana-document').kde;  // Ksana Database Engine
 var kse=Require('ksana-document').kse; // Ksana Search Engine (run at client side)
 var stacktoc=Require("stacktoc");
+var showtext=Require("showtext");
 var resultlist=React.createClass({  //should search result
   show:function() {  
     return this.props.res.excerpt.map(function(r,i){ // excerpt is an array 
@@ -90,32 +91,33 @@ var main = React.createClass({
     var voff=this.state.toc[n].voff;
     this.dosearch(null,null,voff);
   },
-  showText:function(n) {
-    var engine=this.state.db;
-    var voff=this.state.toc[n].voff;
-    var pageOffsets=engine.get("pageOffsets");
-    var fileOffsets=engine.get(["fileOffsets"]);
-    var pageNames=engine.get("pageNames");
-    var fileid=engine.bsearchNear(fileOffsets,voff+1);
-    fileid--;
-    var pageid=engine.bsearchNear(pageOffsets,voff+1);
-    pageid--;
-
-    var fileOffset=fileOffsets[fileid];
-    var pageOffset=engine.bsearchNear(pageOffsets,fileOffset+1);
-    pageOffset--;
-    pageid-=pageOffset;
-
-    kse.highlightPage(engine,fileid,pageid,{q:this.state.q},function(data){
+  showPage:function(f,p) {
+    kse.highlightPage(this.state.db,f,p,{q:this.state.q},function(data){
       this.setState({bodytext:data,res:[]});
     });
+  },
+  showText:function(n) {
+    var res=kse.vpos2filepage(this.state.db,this.state.toc[n].voff);
+    this.showPage(res.file,res.page);
+  },
+  nextpage:function() {
+    var page=this.state.bodytext.page+1;
+    this.showPage(this.state.bodytext.file,page);
+  },
+  prevpage:function() {
+    var page=this.state.bodytext.page-1;
+    if (page<0) page=0;
+    this.showPage(this.state.bodytext.file,page);
   },
   render: function() {  //main render routine
     if (!this.state.quota) { // install required db
         return this.openFileinstaller(true);
     } else { 
-    var text="";    
-    if (this.state.bodytext) text=this.state.bodytext.text;
+    var text="",pagename="";
+    if (this.state.bodytext) {
+      text=this.state.bodytext.text;
+      pagename=this.state.bodytext.pagename;
+    }
     return (
       <div>
         {this.state.dialog?this.openFileinstaller():null}
@@ -129,7 +131,7 @@ var main = React.createClass({
           </div>
           <div className="col-md-5">
           <button onClick={this.fidialog}>file installer</button>
-             <span className="bodytext" dangerouslySetInnerHTML={{__html:text}}></span>
+             <showtext pagename={pagename} text={text} nextpage={this.nextpage} prevpage={this.prevpage} />
           </div>
 
       </div>

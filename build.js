@@ -2247,6 +2247,7 @@ require.register("ksana-document/index.js", function(exports, require, module){
 	,kdb:require("./kdb")
 	,html5fs:require("./html5fs")
 	,plist:require("./plist")
+	,bsearch:require("./bsearch")
 }
 if (typeof process!="undefined") {
 	API.persistent=require('./persistent');
@@ -4156,7 +4157,6 @@ var normalize=null;
 var tokenize=null;
 
 var putPosting=function(tk) {
-	debugger;
 	var	postingid=session.json.tokens[tk];
 	var out=session.json, posting=null;
 	if (!postingid) {
@@ -4170,8 +4170,11 @@ var putPosting=function(tk) {
 }
 var putPage=function(inscription) {
 	var tokenized=tokenize(inscription);
+	var tokenOffset=0, tovpos=[];
 	for (var i=0;i<tokenized.tokens.length;i++) {
 		var t=tokenized.tokens[i];
+		tovpos[tokenOffset]=session.vpos;
+		tokenOffset+=t.length;
 		if (isSkip(t)) {
 			 session.vpos--;
 		} else {
@@ -4180,7 +4183,9 @@ var putPage=function(inscription) {
  		}
  		session.vpos++;
 	}
+	tovpos[tokenOffset]=session.vpos;
 	session.indexedTextLength+= inscription.length;
+	return tovpos;
 }
 var upgradeDocument=function(d,dnew) {
 	var Diff=nodeRequire("./diff");	
@@ -4216,21 +4221,27 @@ var putFileInfo=function(fileContent) {
 var putPages_new=function(parsed,cb) { //25% faster than create a new document
 	//var fileInfo={pageNames:[],pageOffset:[]};
 	var fileContent=[];
+	parsed.tovpos=[];
 
 	putFileInfo(fileContent);
 	for (var i=0;i<parsed.texts.length;i++) {
 		var t=parsed.texts[i];
 		fileContent.push(t.t);
-		putPage(t.t);
+		var tovpos=putPage(t.t);
+		parsed.tovpos[i]=tovpos;
 		session.json.pageNames.push(t.n);
 		session.json.pageOffsets.push(session.vpos);
 	}
+	
 	cb(parsed);//finish
 }
+
 var putPages=function(doc,parsed,cb) {
 	var fileInfo={parentId:[],reverts:[]};
 	var fileContent=[];	
 	var hasParentId=false, hasRevert=false;
+	parsed.tovpos=[];
+
 	putFileInfo(fileContent);
 	if (!session.files) session.files=[];
 	session.json.files.push(fileInfo);
@@ -4239,7 +4250,8 @@ var putPages=function(doc,parsed,cb) {
 		var pg=doc.getPage(i);
 		if (pg.isLeafPage()) {
 			fileContent.push(pg.inscription);
-			putPage(pg.inscription);
+			var tovpos=putPage(pg.inscription);
+			parsed.tovpos[i-1]=tovpos;
 		} else {
 			fileContent.push("");
 		}
@@ -4328,7 +4340,7 @@ var processTags=function(captureTags,tags,texts) {
 	for (var i=0;i<tags.length;i++) {
 
 		for (var j=0;j<tags[i].length;j++) {
-			var T=tags[i][j],tagname=T[1],tagoffset=T[0],attributes=T[2],tagvpos_filestart=T[3];	
+			var T=tags[i][j],tagname=T[1],tagoffset=T[0],attributes=T[2],tagvpos=T[3];	
 			if (captureTags[tagname]) {
 				attr=parseAttributesString(attributes);
 				tagStack.push([tagname,tagoffset,attr,i]);
@@ -4345,13 +4357,24 @@ var processTags=function(captureTags,tags,texts) {
 					tagStack.pop();
 				}
 				var text=getTextBetween(prev[3],i,prev[1],tagoffset);
-				status.vpos=status.fileStartVpos+tagvpos_filestart;
+				status.vpos=tagvpos; 
 				status.tagStack=tagStack;
 				var fields=handler(text, tagname, attr, status);
 				
 				if (fields) storeFields(fields,session.json);
 			}
 		}	
+	}
+}
+var resolveTagsVpos=function(parsed) {
+	var bsearch=require("ksana-document").bsearch;
+	for (var i=0;i<parsed.tags.length;i++) {
+		for (var j=0;j<parsed.tags[i].length;j++) {
+			var t=parsed.tags[i][j];
+			var pos=t[0];
+			t[3]=parsed.tovpos[i][pos];
+			while (pos && typeof t[3]=="undefined") t[3]=parsed.tovpos[i][--pos];
+		}
 	}
 }
 var putFile=function(fn,cb) {
@@ -4383,6 +4406,7 @@ var putFile=function(fn,cb) {
 	parseBody(body,session.config.pageSeparator,function(parsed){
 		status.parsed=parsed;
 		if (callbacks.afterbodyend) {
+			resolveTagsVpos(parsed);
 			if (captureTags) {
 				processTags(captureTags, parsed.tags, parsed.texts);
 			}
@@ -6652,6 +6676,7 @@ require.register("ksana-document/kse.js", function(exports, require, module){
   need a KDE instance to be functional
   
 */
+var bsearch=require("./bsearch");
 
 var _search=function(engine,q,opts,cb) {
 	if (typeof engine=="string") {//browser only
@@ -6675,12 +6700,29 @@ var _highlightPage=function(engine,fileid,pageid,opts,cb){
 		api.excerpt.getPage(engine,fileid,pageid,cb);
 	}
 }
+
+var vpos2filepage=function(engine,vpos) {
+    var pageOffsets=engine.get("pageOffsets");
+    var fileOffsets=engine.get(["fileOffsets"]);
+    var pageNames=engine.get("pageNames");
+    var fileid=bsearch(fileOffsets,vpos+1,true);
+    fileid--;
+    var pageid=bsearch(pageOffsets,vpos+1,true);
+    pageid--;
+
+    var fileOffset=fileOffsets[fileid];
+    var pageOffset=bsearch(pageOffsets,fileOffset+1,true);
+    pageOffset--;
+    pageid-=pageOffset;
+    return {file:fileid,page:pageid};
+}
 var api={
 	search:_search
 	,concordance:require("./concordance")
 	,regex:require("./regex")
 	,highlightPage:_highlightPage
 	,excerpt:require("./excerpt")
+	,vpos2filepage:vpos2filepage
 }
 module.exports=api;
 });
@@ -6794,38 +6836,6 @@ var getDocument=function(filename,cb){
 		});
 	}
 }
-var indexOfSorted = function (array, obj, near) { 
-  var low = 0,
-  high = array.length;
-  while (low < high) {
-    var mid = (low + high) >> 1;
-    if (array[mid]==obj) return mid;
-    array[mid] < obj ? low = mid + 1 : high = mid;
-  }
-  if (near) return low;
-  else if (array[low]==obj) return low;else return -1;
-};
-var indexOfSorted_str = function (array, obj, near) { 
-  var low = 0,
-  high = array.length;
-  while (low < high) {
-    var mid = (low + high) >> 1;
-    if (array[mid]==obj) return mid;
-    (array[mid].localeCompare(obj)<0) ? low = mid + 1 : high = mid;
-  }
-  if (near) return low;
-  else if (array[low]==obj) return low;else return -1;
-};
-
-
-var bsearch=function(array,value,near) {
-	var func=indexOfSorted;
-	if (typeof array[0]=="string") func=indexOfSorted_str;
-	return func(array,value,near);
-}
-var bsearchNear=function(array,value) {
-	return bsearch(array,value,true);
-}
 var createLocalEngine=function(kdb,cb,context) {
 	var engine={lastAccess:new Date(), kdb:kdb, queryCache:{}, postingCache:{}, cache:{}};
 
@@ -6864,8 +6874,6 @@ var createLocalEngine=function(kdb,cb,context) {
 			cb(null);	
 		}
 	};	
-	engine.bsearch=bsearch;
-	engine.bsearchNear=bsearchNear;
 	engine.fileOffset=fileOffset;
 	engine.folderOffset=folderOffset;
 	engine.pageOffset=pageOffset;
@@ -6995,8 +7003,6 @@ var createEngine=function(kdbid,context,cb) {
 	postingCache:{}, queryCache:{}, traffic:0,fetched:0};
 	engine.setContext=function(ctx) {this.context=ctx};
 	engine.get=getRemote;
-	engine.bsearch=bsearch;
-	engine.bsearchNear=bsearchNear;
 	engine.fileOffset=fileOffset;
 	engine.folderOffset=folderOffset;
 	engine.pageOffset=pageOffset;
@@ -8313,9 +8319,10 @@ var highlight=function(Q,opts) {
 var getPage=function(engine,fileid,pageid,cb) {
 	var fileOffsets=engine.get("fileOffsets");
 	var pagekeys=["fileContents",fileid,pageid];
+	var pagenames=engine.getFilePageNames(fileid);
 
 	engine.get(pagekeys,function(text){
-		cb.apply(engine.context,[{text:text,file:fileid,page:pageid}]);
+		cb.apply(engine.context,[{text:text,file:fileid,page:pageid,pagename:pagenames[pageid]}]);
 	});
 }
 
@@ -8328,11 +8335,13 @@ var highlightPage=function(Q,fileid,pageid,opts,cb) {
 	var pageOffsets=Q.engine.getFilePageOffsets(fileid);
 	var startvpos=pageOffsets[pageid];
 	var endvpos=pageOffsets[pageid+1];
+	var pagenames=engine.getFilePageNames(fileid);
 
 	this.getPage(Q.engine, fileid,pageid,function(res){
 		var opt={text:res.text,hits:null,tag:'hl',voff:startvpos,fulltext:true};
 		opt.hits=hitInRange(Q,startvpos,endvpos);
-		cb.apply(Q.engine.context,[{text:injectTag(Q,opt),hits:opt.hits}]);
+		var pagename=pagenames[pageid];
+		cb.apply(Q.engine.context,[{text:injectTag(Q,opt),page:pageid,file:pageid,hits:opt.hits,pagename:pagename}]);
 	})
 }
 module.exports={resultlist:resultlist, 
@@ -12450,17 +12459,17 @@ var parseXMLTag=function(s) {
 	if (!count) attr=undefined;
 	return {name:name,type:type,attr:attr};
 };
-var parseUnit=function(unittext,unitstart) {
+var parseUnit=function(unittext) {
 	// name,sunit, soff, eunit, eoff , attributes
-	var totaltaglength=0,tags=[];
+	var totaltaglength=0,tags=[],tagoffset=0;
 	var parsed=unittext.replace(/<(.*?)>/g,function(m,m1,off){
 		var i=m1.indexOf(" "),tag=m1,attributes="";
 		if (i>-1) {
 			tag=m1.substr(0,i);
 			attributes=m1.substr(i+1);
 		}
-		var tagoffset=off-totaltaglength;
-		tags.push([tagoffset , tag,attributes, unitstart+tagoffset]);
+		tagoffset=off-totaltaglength;
+		tags.push([tagoffset , tag,attributes, 0 ]); //vpos to be resolved
 		totaltaglength+=m.length;
 		return ""; //remove the tag from inscription
 	});
@@ -12485,7 +12494,7 @@ var parseXML=function(buf, opts){
 	var units=splitUnit(buf, unitsep);
 	var texts=[], tags=[];
 	units.map(function(U,i){
-		var out=parseUnit(U[1],U[2]);
+		var out=parseUnit(U[1]);
 		texts.push({n:U[0]||emptypagename,t:out.inscription});
 		tags.push(out.tags);
 	});
@@ -13004,6 +13013,42 @@ var getstatus=function() {
 }
 module.exports={start:start,stop:stop,status:getstatus};
 });
+require.register("ksana-document/bsearch.js", function(exports, require, module){
+var indexOfSorted = function (array, obj, near) { 
+  var low = 0,
+  high = array.length;
+  while (low < high) {
+    var mid = (low + high) >> 1;
+    if (array[mid]==obj) return mid;
+    array[mid] < obj ? low = mid + 1 : high = mid;
+  }
+  if (near) return low;
+  else if (array[low]==obj) return low;else return -1;
+};
+var indexOfSorted_str = function (array, obj, near) { 
+  var low = 0,
+  high = array.length;
+  while (low < high) {
+    var mid = (low + high) >> 1;
+    if (array[mid]==obj) return mid;
+    (array[mid].localeCompare(obj)<0) ? low = mid + 1 : high = mid;
+  }
+  if (near) return low;
+  else if (array[low]==obj) return low;else return -1;
+};
+
+
+var bsearch=function(array,value,near) {
+	var func=indexOfSorted;
+	if (typeof array[0]=="string") func=indexOfSorted_str;
+	return func(array,value,near);
+}
+var bsearchNear=function(array,value) {
+	return bsearch(array,value,true);
+}
+
+module.exports=bsearch;//{bsearchNear:bsearchNear,bsearch:bsearch};
+});
 require.register("ksanaforge-fileinstaller/index.js", function(exports, require, module){
 /** @jsx React.DOM */
 
@@ -13485,6 +13530,7 @@ var fileinstaller=Require("fileinstaller");
 var kde=Require('ksana-document').kde;  // Ksana Database Engine
 var kse=Require('ksana-document').kse; // Ksana Search Engine (run at client side)
 var stacktoc=Require("stacktoc");
+var showtext=Require("showtext");
 var resultlist=React.createClass({displayName: 'resultlist',  //should search result
   show:function() {  
     return this.props.res.excerpt.map(function(r,i){ // excerpt is an array 
@@ -13567,32 +13613,33 @@ var main = React.createClass({displayName: 'main',
     var voff=this.state.toc[n].voff;
     this.dosearch(null,null,voff);
   },
-  showText:function(n) {
-    var engine=this.state.db;
-    var voff=this.state.toc[n].voff;
-    var pageOffsets=engine.get("pageOffsets");
-    var fileOffsets=engine.get(["fileOffsets"]);
-    var pageNames=engine.get("pageNames");
-    var fileid=engine.bsearchNear(fileOffsets,voff+1);
-    fileid--;
-    var pageid=engine.bsearchNear(pageOffsets,voff+1);
-    pageid--;
-
-    var fileOffset=fileOffsets[fileid];
-    var pageOffset=engine.bsearchNear(pageOffsets,fileOffset+1);
-    pageOffset--;
-    pageid-=pageOffset;
-
-    kse.highlightPage(engine,fileid,pageid,{q:this.state.q},function(data){
+  showPage:function(f,p) {
+    kse.highlightPage(this.state.db,f,p,{q:this.state.q},function(data){
       this.setState({bodytext:data,res:[]});
     });
+  },
+  showText:function(n) {
+    var res=kse.vpos2filepage(this.state.db,this.state.toc[n].voff);
+    this.showPage(res.file,res.page);
+  },
+  nextpage:function() {
+    var page=this.state.bodytext.page+1;
+    this.showPage(this.state.bodytext.file,page);
+  },
+  prevpage:function() {
+    var page=this.state.bodytext.page-1;
+    if (page<0) page=0;
+    this.showPage(this.state.bodytext.file,page);
   },
   render: function() {  //main render routine
     if (!this.state.quota) { // install required db
         return this.openFileinstaller(true);
     } else { 
-    var text="";    
-    if (this.state.bodytext) text=this.state.bodytext.text;
+    var text="",pagename="";
+    if (this.state.bodytext) {
+      text=this.state.bodytext.text;
+      pagename=this.state.bodytext.pagename;
+    }
     return (
       React.DOM.div(null, 
         this.state.dialog?this.openFileinstaller():null,
@@ -13606,7 +13653,7 @@ var main = React.createClass({displayName: 'main',
           ),
           React.DOM.div( {className:"col-md-5"}, 
           React.DOM.button( {onClick:this.fidialog}, "file installer"),
-             React.DOM.span( {className:"bodytext", dangerouslySetInnerHTML:{__html:text}})
+             showtext( {pagename:pagename, text:text, nextpage:this.nextpage, prevpage:this.prevpage} )
           )
 
       )
@@ -13851,7 +13898,7 @@ var stacktoc = React.createClass({displayName: 'stacktoc',
     var children=this.enumChildren();
     var current=this.props.data[this.state.cur];
     if (this.props.hits && this.props.hits.length) this.fillHits(ancestors,children);
-    return (
+    return ( 
       React.DOM.div( {className:"stacktoc"},  
         Ancestors( {showExcerpt:this.hitClick, setCurrent:this.setCurrent, toc:this.props.data, data:ancestors}),
         React.DOM.div( {onClick:this.showText, className:"node current", 'data-n':this.state.cur}, React.DOM.span(null, depth,"."),React.DOM.span( {className:"text"}, current.text),this.showHit(current.hit)),
@@ -13862,10 +13909,51 @@ var stacktoc = React.createClass({displayName: 'stacktoc',
 });
 module.exports=stacktoc;
 });
+require.register("yinshun-showtext/index.js", function(exports, require, module){
+/** @jsx React.DOM */
+
+//var othercomponent=Require("other"); 
+var controls = React.createClass({displayName: 'controls',
+  mixins: [React.addons.LinkedStateMixin],
+    
+    getInitialState: function() {
+      return {value: this.props.pagename};
+    },
+    shouldComponentUpdate:function(nextProps,nextState) {
+      this.state.pagename=this.props.pagename;
+      return (nextProps.pagename!=this.props.pagename);
+    },
+    render: function() {
+    return React.DOM.div(null, 
+              React.DOM.button( {onClick:this.props.prev}, "←"),
+               React.DOM.input( {type:"text", ref:"pagename", valueLink:this.linkState('value')}),
+              React.DOM.button( {onClick:this.props.next}, "→")
+              )
+  }  
+});
+var showtext = React.createClass({displayName: 'showtext',
+  getInitialState: function() {
+    return {bar: "world"};
+  },
+  render: function() {
+    var pn=this.props.pagename;
+    return (
+      React.DOM.div(null, 
+        controls( {pagename:this.props.pagename, next:this.props.nextpage, prev:this.props.prevpage}),
+       
+        React.DOM.div( {dangerouslySetInnerHTML:{__html: this.props.text}} )
+      )
+    );
+  }
+});
+module.exports=showtext;
+});
 require.register("yinshun/index.js", function(exports, require, module){
 var boot=require("boot");
 boot("yinshun","main","main");
 });
+
+
 
 
 
@@ -13929,6 +14017,7 @@ require.alias("ksana-document/buildfromxml.js", "yinshun/deps/ksana-document/bui
 require.alias("ksana-document/tei.js", "yinshun/deps/ksana-document/tei.js");
 require.alias("ksana-document/concordance.js", "yinshun/deps/ksana-document/concordance.js");
 require.alias("ksana-document/regex.js", "yinshun/deps/ksana-document/regex.js");
+require.alias("ksana-document/bsearch.js", "yinshun/deps/ksana-document/bsearch.js");
 require.alias("ksana-document/index.js", "yinshun/deps/ksana-document/index.js");
 require.alias("ksana-document/index.js", "ksana-document/index.js");
 require.alias("ksana-document/index.js", "ksana-document/index.js");
@@ -13962,6 +14051,10 @@ require.alias("ksanaforge-stacktoc/index.js", "yinshun/deps/stacktoc/index.js");
 require.alias("ksanaforge-stacktoc/index.js", "yinshun/deps/stacktoc/index.js");
 require.alias("ksanaforge-stacktoc/index.js", "stacktoc/index.js");
 require.alias("ksanaforge-stacktoc/index.js", "ksanaforge-stacktoc/index.js");
+require.alias("yinshun-showtext/index.js", "yinshun/deps/showtext/index.js");
+require.alias("yinshun-showtext/index.js", "yinshun/deps/showtext/index.js");
+require.alias("yinshun-showtext/index.js", "showtext/index.js");
+require.alias("yinshun-showtext/index.js", "yinshun-showtext/index.js");
 require.alias("yinshun/index.js", "yinshun/index.js");
 if (typeof exports == 'object') {
   module.exports = require('yinshun');
