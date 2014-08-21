@@ -12,9 +12,10 @@ var controls = React.createClass({
       return (nextProps.pagename!=this.props.pagename);
     },
     render: function() {
+      
     return <div>
               <button onClick={this.props.prev}>←</button>
-               <input type="text" ref="pagename" valueLink={this.linkState('value')}></input>
+               <input type="text" ref="pagename" valueLink={this.linkState('pagename')}></input>
               <button onClick={this.props.next}>→</button>
               </div>
   }  
