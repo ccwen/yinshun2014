@@ -6735,7 +6735,7 @@ require.register("ksana-document/kde.js", function(exports, require, module){
 if (typeof nodeRequire=='undefined')var nodeRequire=require;
 var pool={},localPool={};
 var apppath="";
-
+var bsearch=require("./bsearch");
 var _getSync=function(keys,recursive) {
 	var out=[];
 	for (var i in keys) {
@@ -6797,17 +6797,16 @@ var getFileRange=function(i) {
 	var pageOffsets=engine.get(["pageOffsets"]);
 	var pageNames=engine.get(["pageNames"]);
 	var fileStart=fileOffsets[i],fileEnd=fileOffsets[i+1];
-	var start=-1,end=-1;	
-	for (var i=0;i<pageOffsets.length;i++) {
-		if (pageOffsets[i]>=fileStart && start==-1) start=i;
-		if (pageOffsets[i]>=fileEnd && end==-1) end=i;
-	}
+
+	var start=bsearch(pageOffsets,fileStart);
+	var end=bsearch(pageOffsets,fileEnd);
+
 	return {start:start,end:end};
 }
 var getFilePageOffsets=function(i) {
 	var pageOffsets=this.get("pageOffsets");
 	var range=getFileRange.apply(this,[i]);
-	return pageOffsets.slice(range.start,range.end);
+	return pageOffsets.slice(range.start,range.end+1);
 }
 
 var getFilePageNames=function(i) {
@@ -8199,12 +8198,12 @@ var resultlist=function(engine,Q,opts,cb) {
 		for (var j=0; j<pagewithhit.length;j++) {
 			if (!pagewithhit[j].length) continue;
 			//var offsets=pagewithhit[j].map(function(p){return p- fileOffsets[i]});
-			output.push(  {file: nfile, page:j,  pagename:pageNames[j+1]});
+			output.push(  {file: nfile, page:j,  pagename:pageNames[j]});
 		}
 	}
 
 	var pagekeys=output.map(function(p){
-		return ["fileContents",p.file,p.page];
+		return ["fileContents",p.file,p.page+1];
 	});
 	//prepare the text
 	engine.get(pagekeys,function(pages){
@@ -8335,13 +8334,13 @@ var highlightPage=function(Q,fileid,pageid,opts,cb) {
 	var pageOffsets=Q.engine.getFilePageOffsets(fileid);
 	var startvpos=pageOffsets[pageid];
 	var endvpos=pageOffsets[pageid+1];
-	var pagenames=engine.getFilePageNames(fileid);
+	var pagenames=Q.engine.getFilePageNames(fileid);
 
-	this.getPage(Q.engine, fileid,pageid,function(res){
+	this.getPage(Q.engine, fileid,pageid+1,function(res){
 		var opt={text:res.text,hits:null,tag:'hl',voff:startvpos,fulltext:true};
 		opt.hits=hitInRange(Q,startvpos,endvpos);
 		var pagename=pagenames[pageid];
-		cb.apply(Q.engine.context,[{text:injectTag(Q,opt),page:pageid,file:pageid,hits:opt.hits,pagename:pagename}]);
+		cb.apply(Q.engine.context,[{text:injectTag(Q,opt),page:pageid,file:fileid,hits:opt.hits,pagename:pagename}]);
 	})
 }
 module.exports={resultlist:resultlist, 
@@ -13535,11 +13534,15 @@ var resultlist=React.createClass({displayName: 'resultlist',  //should search re
   show:function() {  
     return this.props.res.excerpt.map(function(r,i){ // excerpt is an array 
       if (! r) return null;
-      return React.DOM.div(null, 
-      React.DOM.span( {className:"sourcepage"}, r.pagename),")",
+      return React.DOM.div( {'data-vpos':r.hits[0][0]}, 
+      React.DOM.span( {onClick:this.gotopage, className:"sourcepage"}, r.pagename),")",
       React.DOM.span( {className:"resultitem", dangerouslySetInnerHTML:{__html:r.text}})
       )
-    })
+    },this);
+  },
+  gotopage:function(e) {
+    var vpos=parseInt(e.target.parentNode.dataset['vpos']);
+    this.props.gotopage(vpos);
   },
   render:function() { 
     if (this.props.res.excerpt) return React.DOM.div(null, this.show())
@@ -13570,7 +13573,7 @@ var main = React.createClass({displayName: 'main',
     if (this.state.db) {
       return (   
         //"則為正"  "為正觀" both ok
-        React.DOM.div(null, React.DOM.input( {onKeyPress:this.keypress, ref:"tofind", defaultValue:"無常"}),
+        React.DOM.div(null, React.DOM.input( {onKeyPress:this.keypress, ref:"tofind", defaultValue:"嘉義"}),
         React.DOM.button( {ref:"btnsearch", onClick:this.dosearch}, "GO")
         )
         ) 
@@ -13612,14 +13615,19 @@ var main = React.createClass({displayName: 'main',
   showExcerpt:function(n) {
     var voff=this.state.toc[n].voff;
     this.dosearch(null,null,voff);
-  },
-  showPage:function(f,p) {
+  }, 
+  showPage:function(f,p,hideResultlist) {
     kse.highlightPage(this.state.db,f,p,{q:this.state.q},function(data){
-      this.setState({bodytext:data,res:[]});
+      this.setState({bodytext:data});
+      if (hideResultlist) this.setState({res:[]});
     });
-  },
+  }, 
   showText:function(n) {
     var res=kse.vpos2filepage(this.state.db,this.state.toc[n].voff);
+    this.showPage(res.file,res.page,true);
+  },
+  gotopage:function(vpos) {
+    var res=kse.vpos2filepage(this.state.db,vpos);
     this.showPage(res.file,res.page);
   },
   nextpage:function() {
@@ -13631,6 +13639,7 @@ var main = React.createClass({displayName: 'main',
     if (page<0) page=0;
     this.showPage(this.state.bodytext.file,page);
   },
+
   render: function() {  //main render routine
     if (!this.state.quota) { // install required db
         return this.openFileinstaller(true);
@@ -13649,7 +13658,7 @@ var main = React.createClass({displayName: 'main',
           
           React.DOM.span(null, this.state.elapse),
             this.renderinputs(),
-            resultlist( {res:this.state.res})
+            resultlist( {gotopage:this.gotopage, res:this.state.res})
           ),
           React.DOM.div( {className:"col-md-5"}, 
           React.DOM.button( {onClick:this.fidialog}, "file installer"),
@@ -13915,17 +13924,16 @@ require.register("yinshun-showtext/index.js", function(exports, require, module)
 //var othercomponent=Require("other"); 
 var controls = React.createClass({displayName: 'controls',
   mixins: [React.addons.LinkedStateMixin],
-    
+     
     getInitialState: function() {
       return {value: this.props.pagename};
     },
     shouldComponentUpdate:function(nextProps,nextState) {
-      this.state.pagename=this.props.pagename;
+      this.state.pagename=nextProps.pagename;
       return (nextProps.pagename!=this.props.pagename);
     },
-    render: function() {
-      
-    return React.DOM.div(null, 
+    render: function() {   
+     return React.DOM.div(null, 
               React.DOM.button( {onClick:this.props.prev}, "←"),
                React.DOM.input( {type:"text", ref:"pagename", valueLink:this.linkState('pagename')}),
               React.DOM.button( {onClick:this.props.next}, "→")

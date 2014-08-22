@@ -3,17 +3,16 @@
 //var othercomponent=Require("other"); 
 var controls = React.createClass({
   mixins: [React.addons.LinkedStateMixin],
-    
+     
     getInitialState: function() {
       return {value: this.props.pagename};
     },
     shouldComponentUpdate:function(nextProps,nextState) {
-      this.state.pagename=this.props.pagename;
+      this.state.pagename=nextProps.pagename;
       return (nextProps.pagename!=this.props.pagename);
     },
-    render: function() {
-      
-    return <div>
+    render: function() {   
+     return <div>
               <button onClick={this.props.prev}>←</button>
                <input type="text" ref="pagename" valueLink={this.linkState('pagename')}></input>
               <button onClick={this.props.next}>→</button>
