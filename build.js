@@ -6800,6 +6800,8 @@ var getFileRange=function(i) {
 
 	var start=bsearch(pageOffsets,fileStart);
 	var end=bsearch(pageOffsets,fileEnd);
+	if (pageOffsets[start+1]==pageOffsets[start]) start++;
+	if (pageOffsets[end+1]==pageOffsets[end]) end++;
 
 	return {start:start,end:end};
 }
@@ -13579,7 +13581,7 @@ var main = React.createClass({displayName: 'main',
         ) 
     } else {
       return React.DOM.span(null, "loading database....")
-    }
+    } 
   },  
   genToc:function(texts,depths,voffs) {
     var out=[{depth:0,text:"印順法師佛學著作集"}];

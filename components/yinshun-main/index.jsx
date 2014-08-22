@@ -58,7 +58,7 @@ var main = React.createClass({
         ) 
     } else {
       return <span>loading database....</span>
-    }
+    } 
   },  
   genToc:function(texts,depths,voffs) {
     var out=[{depth:0,text:"印順法師佛學著作集"}];
