@@ -2,21 +2,23 @@
 
 //var othercomponent=Require("other"); 
 var controls = React.createClass({
-  mixins: [React.addons.LinkedStateMixin],
-     
-    getInitialState: function() {
-      return {value: this.props.pagename};
-    },
-    shouldComponentUpdate:function(nextProps,nextState) {
-      this.state.pagename=nextProps.pagename;
-      return (nextProps.pagename!=this.props.pagename);
-    },
-    render: function() {   
-     return <div>
-              <button onClick={this.props.prev}>←</button>
-               <input type="text" ref="pagename" valueLink={this.linkState('pagename')}></input>
-              <button onClick={this.props.next}>→</button>
-              </div>
+  getInitialState: function() {
+    return {pagename:this.props.pagename};
+  },
+  updateValue:function(e){
+    var newpagename=this.refs.pagename.getDOMNode().value;
+    this.props.setpage(newpagename);
+  },  
+  shouldComponentUpdate:function(nextProps,nextState) {
+    nextState.pagename=nextProps.pagename;
+    return true;
+  },
+  render: function() {   
+   return <div>
+      <button onClick={this.props.prev}>←</button>
+       <input type="text" ref="pagename" onChange={this.updateValue} value={this.state.pagename}></input>
+      <button onClick={this.props.next}>→</button>
+      </div>
   }  
 });
 var showtext = React.createClass({
@@ -27,7 +29,8 @@ var showtext = React.createClass({
     var pn=this.props.pagename;
     return (
       <div>
-        <controls pagename={this.props.pagename} next={this.props.nextpage} prev={this.props.prevpage}/>
+        <controls pagename={this.props.pagename} next={this.props.nextpage} 
+        prev={this.props.prevpage} setpage={this.props.setpage}/>
        
         <div dangerouslySetInnerHTML={{__html: this.props.text}} />
       </div>

@@ -36,11 +36,11 @@ var main = React.createClass({
   getInitialState: function() {
     return {res:{},db:null};
   },
-  dosearch:function(e,rid,start) {
-    var start=start||0;
+  dosearch:function() {
+    var start=arguments[2]||0; //event == arguments[0], react_id==arguments[1]
     var t=new Date();
     var tofind=this.refs.tofind.getDOMNode().value; // get tofind
-    kse.search(this.state.db,tofind,{range:{start:start,maxhit:20}},function(data){ //call search engine
+    kse.search(this.state.db,tofind,{range:{start:start,maxhit:50}},function(data){ //call search engine
       this.setState({res:data,elapse:(new Date()-t)+"ms",q:tofind});
       //console.log(data) ; // watch the result from search engine
     });
@@ -118,7 +118,12 @@ var main = React.createClass({
     if (page<0) page=0;
     this.showPage(this.state.bodytext.file,page);
   },
-
+  setPage:function(newpagename) {
+    var file=this.state.bodytext.file;
+    var pagenames=this.state.db.getFilePageNames(file);
+    var p=pagenames.indexOf(newpagename);
+    if (p>-1) this.showPage(file,p);
+  },
   render: function() {  //main render routine
     if (!this.state.quota) { // install required db
         return this.openFileinstaller(true);
@@ -141,7 +146,10 @@ var main = React.createClass({
           </div>
           <div className="col-md-5">
           <button onClick={this.fidialog}>file installer</button>
-             <showtext pagename={pagename} text={text} nextpage={this.nextpage} prevpage={this.prevpage} />
+             <showtext pagename={pagename} text={text} 
+             nextpage={this.nextpage} 
+             setpage={this.setPage}
+             prevpage={this.prevpage} />
           </div>
 
       </div>
