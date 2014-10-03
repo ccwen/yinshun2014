@@ -36,15 +36,17 @@ var main = React.createClass({
     
   }, 
   getInitialState: function() {
-    return {res:{},db:null};
+    return {res:{},db:null,bodytext:{file:0}};
   },
   encodeHashTag:function(f,p) { //file/page to hash tag
     var pagename=this.state.db.getFilePageNames(f)[p];
-    return "#"+f+"."+p;
+    return "#"+(f+1)+"."+pagename;
   },
   decodeHashTag:function(s) {
+    if (!s)return;
     var fp=s.match(/#(\d)+\.(.*)/);
-    this.setPage(fp[2],fp[1]);
+    var file=parseInt(fp[1])-1;
+    this.setPage(fp[2],file);
   },
   goHashTag:function() {
     this.decodeHashTag(window.location.hash);
@@ -65,7 +67,7 @@ var main = React.createClass({
     if (this.state.db) {
       return (   
         //"則為正"  "為正觀" both ok
-        <div><input onKeyPress={this.keypress} ref="tofind" defaultValue="嘉義"></input>
+        <div><input onKeyPress={this.keypress} ref="tofind" defaultValue="印"></input>
         <button ref="btnsearch" onClick={this.dosearch}>GO</button>
         </div>
         ) 
@@ -111,6 +113,7 @@ var main = React.createClass({
   },
   showPage:function(f,p,hideResultlist) {
     window.location.hash = this.encodeHashTag(f,p);
+
     kse.highlightPage(this.state.db,f,p,{q:this.state.q},function(data){
       this.setState({bodytext:data});
       if (hideResultlist) this.setState({res:[]});
@@ -139,6 +142,13 @@ var main = React.createClass({
     var p=pagenames.indexOf(newpagename);
     if (p>-1) this.showPage(file,p);
   },
+  filepage2vpos:function() {
+    var offsets=this.state.db.getFilePageOffsets(this.state.bodytext.file);
+    return offsets[this.state.bodytext.page];
+  },
+  syncToc:function() {
+    this.setState({goVoff:this.filepage2vpos()});
+  },
   render: function() {  //main render routine
     if (!this.state.quota) { // install required db
         return this.openFileinstaller(true);
@@ -152,7 +162,9 @@ var main = React.createClass({
       <div>
         {this.state.dialog?this.openFileinstaller():null}
         <div className="col-md-3">
-          <stacktoc showText={this.showText} showExcerpt={this.showExcerpt} hits={this.state.res.rawresult} data={this.state.toc}/></div>
+          <stacktoc 
+            showText={this.showText} showExcerpt={this.showExcerpt} hits={this.state.res.rawresult} 
+            data={this.state.toc} goVoff={this.state.goVoff} /></div>
           <div className="col-md-4">
           
           <span>{this.state.elapse}</span>
@@ -164,7 +176,8 @@ var main = React.createClass({
              <showtext pagename={pagename} text={text} 
              nextpage={this.nextpage} 
              setpage={this.setPage}
-             prevpage={this.prevpage} />
+             prevpage={this.prevpage} 
+             syncToc={this.syncToc}/>
           </div>
 
       </div>
