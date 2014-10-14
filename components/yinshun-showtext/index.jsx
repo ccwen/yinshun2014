@@ -6,10 +6,12 @@ var controls = React.createClass({
     return {pagename:this.props.pagename};
   },
   updateValue:function(e){
+    if (e.key!="Enter") return;
     var newpagename=this.refs.pagename.getDOMNode().value;
     this.props.setpage(newpagename);
   },  
   shouldComponentUpdate:function(nextProps,nextState) {
+    this.refs.pagename.getDOMNode().value=nextProps.pagename;
     nextState.pagename=nextProps.pagename;
     return true;
   },
@@ -19,7 +21,7 @@ var controls = React.createClass({
   render: function() {   
    return <div>
       <button onClick={this.props.prev}>←</button>
-       <input type="text" ref="pagename" onChange={this.updateValue} value={this.state.pagename}></input>
+       <input type="text" ref="pagename" onKeyUp={this.updateValue}></input>
       <button onClick={this.props.next}>→</button>
       <button onClick={this.gotoToc}>Toc</button>
       </div>

@@ -1,5 +1,4 @@
 /** @jsx React.DOM */
-
 var require_kdb=[{ 
   filename:"yinshun.kdb"  , url:"http://ya.ksana.tw/kdb/yinshun.kdb" , desc:"yinshun"
 }];   
@@ -61,7 +60,7 @@ var main = React.createClass({
     });
   },
   keypress:function(e) {
-    if (e.keyCode==13) this.dosearch();
+    if (e.key=="enter") this.dosearch();
   },
   renderinputs:function() {  // input interface for search
     if (this.state.db) {
@@ -99,7 +98,7 @@ var main = React.createClass({
   },
   openFileinstaller:function(autoclose) {
     if (window.location.origin.indexOf("http://127.0.0.1")==0) {
-      require_kdb[0].url=window.location.origin+"/yinshun.kdb";
+      require_kdb[0].url=window.location.origin+window.location.pathname+"yinshun.kdb";
     }
     return <fileinstaller quota="512M" autoclose={autoclose} needed={require_kdb} 
                      onReady={this.onReady}/>
@@ -137,7 +136,7 @@ var main = React.createClass({
     this.showPage(this.state.bodytext.file,page);
   },
   setPage:function(newpagename,file) {
-    file=file||this.state.bodytext.file; 
+    file=file||this.state.bodytext.file;
     var pagenames=this.state.db.getFilePageNames(file);
     var p=pagenames.indexOf(newpagename);
     if (p>-1) this.showPage(file,p);
