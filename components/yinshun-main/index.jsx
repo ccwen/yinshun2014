@@ -13,7 +13,7 @@ var resultlist=React.createClass({  //should search result
     return this.props.res.excerpt.map(function(r,i){ // excerpt is an array 
       if (! r) return null;
       return <div data-vpos={r.hits[0][0]}>
-      <span onClick={this.gotopage} className="sourcepage">{r.pagename}</span>)
+      <a href="#" onClick={this.gotopage} className="sourcepage">{r.pagename}</a>)
       <span className="resultitem" dangerouslySetInnerHTML={{__html:r.text}}></span>
       </div>
     },this);
@@ -66,7 +66,7 @@ var main = React.createClass({
     if (this.state.db) {
       return (   
         //"則為正"  "為正觀" both ok
-        <div><input onKeyPress={this.keypress} ref="tofind" defaultValue="印"></input>
+        <div><input onKeyPress={this.keypress} ref="tofind" defaultValue="印順"></input>
         <button ref="btnsearch" onClick={this.dosearch}>GO</button>
         </div>
         ) 
